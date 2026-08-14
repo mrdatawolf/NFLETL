@@ -1,0 +1,9 @@
+node_modules/
+dist/
+data/
+.env
+
+# Source database clones (production data - never commit)
+Examples/*
+!Examples/README.md
+.claude/*

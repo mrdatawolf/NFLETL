@@ -1,0 +1,23 @@
+{
+  "name": "nfletl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "run": "tsx src/run.ts",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').cpSync('src/tally/schema.sql','dist/tally/schema.sql')\"",
+    "start": "node dist/run.js",
+    "seed:porter": "tsx src/mock/seedPorter.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "better-sqlite3": "^11.8.1",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
