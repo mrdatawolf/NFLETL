@@ -8,20 +8,33 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-# .env is a trusted local file. Quote values containing #, spaces, or shell
-# metacharacters (for example PGPASSWORD='abc#123').
-set -a
-# shellcheck disable=SC1091
-source .env
-set +a
+# Read only the keys needed for provisioning. Do not `source .env`: dotenv
+# permits values that are not valid shell syntax, and a sourced file could
+# execute arbitrary commands. The final definition of a repeated key wins.
+read_dotenv_value() {
+  local key=$1 line value=''
+  while IFS= read -r line || [ -n "$line" ]; do
+    line=${line%$'\r'}
+    if [[ $line == "$key="* ]]; then
+      value=${line#*=}
+    fi
+  done < .env
 
-: "${PGUSER:?PGUSER must be set in .env}"
-: "${PGPASSWORD:?PGPASSWORD must be set in .env}"
-: "${PGDATABASE:?PGDATABASE must be set in .env}"
+  if [[ $value == \"*\" && $value == *\" ]]; then
+    value=${value:1:${#value}-2}
+  elif [[ $value == \'*\' && $value == *\' ]]; then
+    value=${value:1:${#value}-2}
+  fi
+  printf '%s' "$value"
+}
 
-ETL_USER=$PGUSER
-ETL_PASSWORD=$PGPASSWORD
-BRONZE_DATABASE=$PGDATABASE
+ETL_USER=$(read_dotenv_value PGUSER)
+ETL_PASSWORD=$(read_dotenv_value PGPASSWORD)
+BRONZE_DATABASE=$(read_dotenv_value PGDATABASE)
+
+: "${ETL_USER:?PGUSER must be set in .env}"
+: "${ETL_PASSWORD:?PGPASSWORD must be set in .env}"
+: "${BRONZE_DATABASE:?PGDATABASE must be set in .env}"
 
 # Use the local postgres administrator for provisioning. Clear application
 # PG* values so they cannot redirect or change the admin connection.

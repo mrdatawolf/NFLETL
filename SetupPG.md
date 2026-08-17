@@ -44,9 +44,10 @@ PGUSER=nfletl
 PGPASSWORD='choose-a-development-password'
 ```
 
-Quote `PGPASSWORD` when it contains `#`, spaces, or shell metacharacters. Keep
-`.env` uncommitted, remove any obsolete `DB_PATH` setting, and only source an
-`.env` file you trust—the setup wrapper reads it as shell syntax.
+Quotes around `PGPASSWORD` are recommended when it contains `#`, spaces, or
+shell metacharacters. The wrapper reads only the three required PostgreSQL
+keys and does not execute or source `.env`. Keep `.env` uncommitted and remove
+any obsolete `DB_PATH` setting.
 
 ## Automated local setup
 
