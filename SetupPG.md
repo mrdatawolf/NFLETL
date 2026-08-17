@@ -96,8 +96,10 @@ reported as `skipped`; configure their paths in `.env` and rerun when those
 files become available. Hash deduplication prevents unchanged source rows
 from being duplicated.
 
-If Node reports that `better_sqlite3.node` was compiled for a different
-`NODE_MODULE_VERSION`, rebuild it for the active Node runtime and rerun:
+`start.sh` and `start.bat` test the native `better-sqlite3` addon after
+installing dependencies and automatically rebuild it when it was compiled for
+a different `NODE_MODULE_VERSION`. When running the npm commands manually,
+the equivalent recovery is:
 
 ```bash
 npm rebuild better-sqlite3
