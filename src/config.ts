@@ -31,8 +31,15 @@ const tallyDbPath = process.env.TALLY_DB_PATH || './data/tally.db';
 // here rather than read via readSource() (its path is fixed, not user-set).
 const tallySource: SourceConfig = { name: 'tally', type: 'sqlite', path: tallyDbPath, configured: true };
 
+const postgresUser = process.env.PGUSER || process.env.USER || 'postgres';
+
 export const config = {
-  dbPath: process.env.DB_PATH || './data/bronze.db',
+  postgres: {
+    host: process.env.PGHOST || 'localhost',
+    port: Number(process.env.PGPORT || 5432),
+    database: process.env.PGDATABASE || postgresUser,
+    user: postgresUser
+  },
   tallySourceDir: process.env.TALLY_SOURCE_DIR || './Examples/tally',
   tallyDbPath,
   sources: [readSource('raptor'), readSource('sawfilers'), readSource('porter'), tallySource]

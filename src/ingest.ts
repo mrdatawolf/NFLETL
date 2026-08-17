@@ -65,7 +65,7 @@ async function landRows(
        ON CONFLICT (row_hash) DO NOTHING`,
       params
     );
-    inserted += result.affectedRows ?? 0;
+    inserted += result.rowCount ?? 0;
   }
 
   return { inserted, skipped: rows.length - inserted };

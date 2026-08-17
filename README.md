@@ -1,11 +1,10 @@
 # NFLETL
 
 Standalone ETL for NFLDataAPI's bronze layer. Owns everything that writes to
-the bronze database: parsing NBE Edger Optimizer Tally reports into their own
-SQLite db, and scanning all configured sources (Raptor, Saw Filers, Porter,
-and the tally output) into the shared bronze PGlite database. NFLDataAPI is a
-read-only consumer of that same database — it no longer ingests anything
-itself.
+the PostgreSQL bronze database: parsing NBE Edger Optimizer Tally reports into
+their own SQLite db, and scanning all configured sources (Raptor, Saw Filers,
+Porter, and the tally output) into bronze. NFLDataAPI is a read-only consumer
+of that database — it no longer ingests anything itself.
 
 This mirrors the split already used by [SFP_Tally_ETL](../SFP_Tally_ETL) /
 SFPDataAPI: a plain CLI tool invoked by cron (or manually), not a long-running
@@ -19,7 +18,7 @@ server. No MW/shipping pipeline here — not used at this location.
 | `src/tally/etl.ts` | Orchestration for the tally pipeline — discovers `.txt` files, skips ones already loaded, parses, writes into `TALLY_DB_PATH` (SQLite) in a transaction per file. |
 | `src/tally/schema.sql` | `CREATE TABLE IF NOT EXISTS` for the tally SQLite db, run on every startup. |
 | `src/config.ts` | Env parsing, source registry (raptor/sawfilers/porter/tally). |
-| `src/db.ts` | Bronze PGlite database — schema/landing-table creation, watermarks. Moved from NFLDataAPI. |
+| `src/db.ts` | Bronze PostgreSQL connection — schema/landing-table creation and watermarks. |
 | `src/ingest.ts` | Scan orchestrator — lands every configured source into bronze with hash-dedupe and run history. Moved from NFLDataAPI. |
 | `src/sources/` | Connectors: `sqliteSource`, `pgliteSource`. Moved from NFLDataAPI. |
 | `src/mock/seedPorter.ts` | Porter stand-in database seeder. Moved from NFLDataAPI. |
@@ -34,31 +33,25 @@ same generic connector as Raptor and Saw Filers.
 ```bash
 npm install
 cp .env.example .env   # then fill in paths — see below
+./ops/setup-postgres.sh # provision the configured local role/database/schema
 npm run seed:porter    # first time only, creates the mock Porter database
 npm run run            # or ./start.sh / start.bat for install+build+run
 ```
+
+See [SetupPG.md](./SetupPG.md) for PostgreSQL 17 installation, automated
+provisioning, remote-server setup, and verification details.
 
 Intended to be invoked on a schedule by external cron, not left running.
 
 ## Config
 
-See `.env.example`. Key thing to get right: **`DB_PATH` must resolve to the
-same directory as NFLDataAPI's `DB_PATH`** — this repo is the only writer to
-bronze, NFLDataAPI just reads the same PGlite directory. Since the two repos
-are separate checkouts, don't leave this as a bare relative path (that
-silently creates a second, disconnected database) — point it explicitly at
-NFLDataAPI's `data/` dir.
+See `.env.example`. Configure the standard `PGHOST`, `PGPORT`, `PGDATABASE`,
+`PGUSER`, and `PGPASSWORD` variables for the bronze PostgreSQL database. The
+database and roles must be provisioned before running NFLETL; startup checks
+the connection and then creates the idempotent bronze schema objects.
 
-## Known risk: concurrent access to bronze.db
-
-PGlite is not built for multi-process concurrent access the way WAL-mode
-SQLite or a real Postgres server is. With NFLETL (writer) and NFLDataAPI
-(reader) as separate processes opening the same PGlite data directory, a scan
-running here at the same moment NFLDataAPI is serving a request could hit
-lock contention or errors. This hasn't been load-tested — if it becomes a
-problem, options include running NFLETL scans during low-traffic windows,
-or moving bronze to a real Postgres instance both sides connect to over the
-network instead of a shared embedded file.
+`@electric-sql/pglite` remains a dependency only for reading configured
+PGlite source databases such as the Porter mock. Bronze itself is PostgreSQL.
 
 ## Sample data
 
