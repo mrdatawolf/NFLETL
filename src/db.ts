@@ -1,14 +1,23 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { PGlite } from '@electric-sql/pglite';
+import { Pool } from 'pg';
 import { config } from './config.js';
 
-fs.mkdirSync(path.dirname(config.dbPath), { recursive: true });
-
-export const db = new PGlite(config.dbPath);
+// Pool reads PGHOST, PGPORT, PGDATABASE, PGUSER, and PGPASSWORD using the
+// standard libpq-compatible environment variable names.
+export const db = new Pool();
 
 export async function initDb() {
-  await db.exec(`
+  try {
+    await db.query('SELECT 1');
+  } catch (error) {
+    const { host, port, database, user } = config.postgres;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Cannot connect to PostgreSQL at ${host}:${port}/${database} as ${user}: ${message}`,
+      { cause: error }
+    );
+  }
+
+  await db.query(`
     CREATE SCHEMA IF NOT EXISTS bronze;
 
     CREATE TABLE IF NOT EXISTS bronze.ingest_runs (
@@ -60,7 +69,7 @@ export function landingTableName(source: string, table: string): string {
 }
 
 export async function ensureLandingTable(name: string) {
-  await db.exec(`
+  await db.query(`
     CREATE TABLE IF NOT EXISTS bronze."${name}" (
       id SERIAL PRIMARY KEY,
       source TEXT NOT NULL,
