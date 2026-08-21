@@ -1,12 +1,16 @@
 // Parser for NBE Edger Optimizer Tally .txt reports.
 // Ported from SFP_Tally_ETL's tally_parser.py — same report format across mills.
+import type { TallyDataVersion } from '../config.js';
 
 const FILENAME_RE = /tally(\d{2})(\d{2})(\d{2})-\d+\.txt$/;
 const REPORT_DATETIME_RE = /^(\d{2})\/(\d{2})\/(\d{2})\s+(\d{2}:\d{2}:\d{2})/m;
 const SEPARATOR_RE = /^=+$/m;
 
 const LENGTH_HEADER_RE = /(\d+)'/g;
-const WOOD_BLOCK_RE = /^(\S+)\s+(\d+\/\d+)x([\d.]+)\s+(\S+)$/;
+const SFP_WOOD_BLOCK_RE = /^(\S+)\s+(\d+\/\d+)x([\d.]+)\s+(\S+)$/;
+// NFL uses nominal-inch product names (2"x4", 2Thinx6", and occasionally
+// 2"#2tx4") rather than SFP's fractional/decimal dimensions.
+const NFL_WOOD_BLOCK_RE = /^(\S+)\s+(\S+?)x([\d.]+)"?\s+(\S+)$/;
 const PIECES_RE = /^pieces\s+(.+)$/;
 const BDFT_RE = /^\s*bd[-_]ft\s+(.+)$/;
 
@@ -109,7 +113,7 @@ function parseReportDatetime(text: string): string {
   return `${2000 + Number(yy)}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')} ${timePart}`;
 }
 
-function parseDetails(detailsText: string): DetailRow[] {
+function parseDetails(detailsText: string, dataVersion: TallyDataVersion): DetailRow[] {
   const lines = detailsText.split('\n');
   const headerLine = lines.find((line) => line.includes("'") && line.includes('Totals'));
   if (!headerLine) throw new TallyParseError('could not find details column header line');
@@ -118,9 +122,13 @@ function parseDetails(detailsText: string): DetailRow[] {
   const rows: DetailRow[] = [];
   let i = 0;
   while (i < lines.length) {
-    const m = WOOD_BLOCK_RE.exec(lines[i].trim());
+    const woodBlockRe = dataVersion === 'NFL' ? NFL_WOOD_BLOCK_RE : SFP_WOOD_BLOCK_RE;
+    const m = woodBlockRe.exec(lines[i].trim());
     if (m) {
-      const [, woodType, thickness, widthStr, grade] = m;
+      const [, woodType, rawThickness, widthStr, grade] = m;
+      // In a normal NFL dimension the quote denotes inches and is just the
+      // separator before "x". Preserve meaningful suffixes such as Thin/#2t.
+      const thickness = dataVersion === 'NFL' ? rawThickness.replace(/"$/, '') : rawThickness;
       const width = Number(widthStr);
       const piecesLine = lines[i + 1];
       const bdftLine = lines[i + 2];
@@ -149,10 +157,16 @@ function parseDetails(detailsText: string): DetailRow[] {
       i += 1;
     }
   }
+  if (dataVersion === 'NFL' && rows.length === 0) {
+    throw new TallyParseError(`could not find any ${dataVersion} detail product rows`);
+  }
   return rows;
 }
 
-function parseSummary(summaryText: string): { summary: TallySummary; solutions: SolutionRow[]; rejectReasons: RejectReasonRow[] } {
+function parseSummary(
+  summaryText: string,
+  dataVersion: TallyDataVersion
+): { summary: TallySummary; solutions: SolutionRow[]; rejectReasons: RejectReasonRow[] } {
   const timeM = TIME_RE.exec(summaryText);
   if (!timeM) throw new TallyParseError('could not find Time: line');
 
@@ -176,6 +190,11 @@ function parseSummary(summaryText: string): { summary: TallySummary; solutions: 
 
   const rejectReasons: RejectReasonRow[] = REJECT_REASON_LABELS.map((label) => {
     const m = labelPattern(label).exec(summaryText);
+    // North Fork's report template never prints Too Long or Short, and its
+    // earliest version also omitted Board Too Thin. An omitted counter is 0.
+    if (!m && dataVersion === 'NFL' && (label === 'Too Long or Short' || label === 'Board Too Thin')) {
+      return { reason: label, count: 0 };
+    }
     if (!m) throw new TallyParseError(`could not find reject reason line: "${label}"`);
     return { reason: label, count: Number(m[1]) };
   });
@@ -206,7 +225,7 @@ function parseSummary(summaryText: string): { summary: TallySummary; solutions: 
   return { summary, solutions, rejectReasons };
 }
 
-export function parseTallyText(filename: string, rawText: string): ParsedTally {
+export function parseTallyText(filename: string, rawText: string, dataVersion: TallyDataVersion = 'SFP'): ParsedTally {
   // JS regex "." excludes \r (unlike Python's), so CRLF-sourced files would
   // otherwise fail every end-of-line capture group. Normalize up front.
   const text = rawText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -219,8 +238,8 @@ export function parseTallyText(filename: string, rawText: string): ParsedTally {
   const detailsText = text.slice(0, sepMatch.index);
   const summaryText = text.slice(sepMatch.index + sepMatch[0].length);
 
-  const detailRows = parseDetails(detailsText);
-  const { summary, solutions, rejectReasons } = parseSummary(summaryText);
+  const detailRows = parseDetails(detailsText, dataVersion);
+  const { summary, solutions, rejectReasons } = parseSummary(summaryText, dataVersion);
 
   return {
     filename,

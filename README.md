@@ -53,6 +53,10 @@ the connection and then creates the idempotent bronze schema objects.
 `@electric-sql/pglite` remains a dependency only for reading configured
 PGlite source databases such as the Porter mock. Bronze itself is PostgreSQL.
 
+`TALLY_DATA_VERSION` selects the tally report format. Leave it unset or set it
+to `SFP` for the original Sequoia parser rules; set it to `NFL` for North Fork
+reports. Any other value is rejected at startup.
+
 ## Sample data
 
 `Examples/tally/` currently holds Sequoia Forest Products' report format as a

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 dotenv.config();
 
 export type SourceType = 'sqlite' | 'pglite';
+export type TallyDataVersion = 'SFP' | 'NFL';
 
 export type SourceConfig = {
   name: string;
@@ -26,6 +27,14 @@ function readSource(name: string): SourceConfig {
 
 const tallyDbPath = process.env.TALLY_DB_PATH || './data/tally.db';
 
+function readTallyDataVersion(): TallyDataVersion {
+  const value = (process.env.TALLY_DATA_VERSION || 'SFP').toUpperCase();
+  if (value !== 'SFP' && value !== 'NFL') {
+    throw new Error(`TALLY_DATA_VERSION must be "SFP" or "NFL", got "${value}"`);
+  }
+  return value;
+}
+
 // The tally pipeline's own SQLite output is landed into bronze the same way
 // as any externally-configured source, so it's appended to the registry
 // here rather than read via readSource() (its path is fixed, not user-set).
@@ -42,6 +51,7 @@ export const config = {
   },
   tallySourceDir: process.env.TALLY_SOURCE_DIR || './Examples/tally',
   tallyDbPath,
+  tallyDataVersion: readTallyDataVersion(),
   sources: [readSource('raptor'), readSource('sawfilers'), readSource('porter'), tallySource]
 };
 

@@ -106,7 +106,7 @@ export async function runTallyEtl(): Promise<TallyEtlResult> {
       const filePath = path.join(config.tallySourceDir, filename);
       try {
         const text = fs.readFileSync(filePath, 'utf-8');
-        const parsed = parseTallyText(filename, text);
+        const parsed = parseTallyText(filename, text, config.tallyDataVersion);
         insertFile(db, parsed);
         loaded += 1;
         console.log(`[tally] loaded  ${filename}`);
